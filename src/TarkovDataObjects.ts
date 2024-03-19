@@ -1,4 +1,4 @@
-import {Column, Entity, PrimaryColumn} from "typeorm";
+import {Column, Entity, PrimaryColumn, PrimaryGeneratedColumn} from "typeorm";
 
 @Entity('tarkov_trader')
 export class TarkovTrader {
@@ -27,6 +27,10 @@ export class TarkovTrader {
     @Column()
     image4xLink: string
 
+    levels: TarkovTraderLevel[] = []
+    barters: TarkovTraderBarter[] = []
+    cashOffers: TarkovTraderCashOffer[] = []
+
     constructor(data: any) {
         if (data) {
             this.id = data.id
@@ -37,6 +41,196 @@ export class TarkovTrader {
             this.discount = data.discount
             this.imageLink = data.imageLink
             this.image4xLink = data.image4xLink
+            for (let level of data.levels) {
+                this.levels.push(new TarkovTraderLevel(this.id, level))
+            }
+            for (let barter of data.barters) {
+                this.barters.push(new TarkovTraderBarter(this.id, barter))
+            }
+            for (let i = 0; i < data.cashOffers.length; i++) {
+                this.cashOffers.push(new TarkovTraderCashOffer(this.id, i, data.cashOffers[i]))
+            }
+        }
+    }
+
+}
+
+@Entity('tarkov_trader_barter')
+export class TarkovTraderBarter {
+    @PrimaryColumn()
+    tid: string
+
+    @PrimaryColumn({type: 'integer', name: 'barter_idx'})
+    bid: number
+
+    @Column({type: 'integer'})
+    level: number
+
+    @Column({ name: 'task_id', nullable: true})
+    taskId: string
+
+    requirements: TarkovTraderBarterRequirement[] = []
+    rewards: TarkovTraderBarterRequirement[] = []
+
+    constructor(tid: string, barter: any) {
+        if (barter) {
+            this.tid = tid;
+            this.level = barter.level;
+            this.taskId = barter.taskUnlock?.id ?? barter.taskUnlock;
+            for(let i = 0; i < barter.requiredItems.length; i++) {
+                this.requirements.push(new TarkovTraderBarterRequirement(tid, i, false, barter.requiredItems[i]))
+            }
+            for(let i = 0; i < barter.rewardItems.length; i++) {
+                this.rewards.push(new TarkovTraderBarterRequirement(tid, i, true, barter.rewardItems[i]))
+            }
+        }
+    }
+
+}
+
+@Entity('tarkov_trader_barter_requirement')
+export class TarkovTraderBarterRequirement {
+
+    @PrimaryColumn()
+    tid: string
+
+    @PrimaryColumn()
+    bid: number
+
+    @PrimaryColumn()
+    item: string;
+
+    @PrimaryColumn()
+    isReward: boolean;
+
+    @PrimaryGeneratedColumn('increment')
+    idx: number
+
+    @Column({type: 'integer'})
+    quantity: number;
+
+    constructor(tid: string, idx: number, isReward: boolean, data: any) {
+        if (data) {
+            this.tid = tid;
+            this.bid = idx;
+            this.item = data.item.id;
+            this.isReward = isReward;
+            this.quantity = data.quantity;
+        }
+    }
+
+
+}
+
+@Entity('tarkov_trader_cash_offer')
+export class TarkovTraderCashOffer {
+    @PrimaryColumn()
+    tid: string
+
+    @PrimaryColumn()
+    cid: number
+
+    @PrimaryColumn()
+    item: string
+
+    @Column({ name: 'currency_item'})
+    currencyItem: string
+
+    @Column({name: 'task_unlock', nullable: true})
+    taskUnlock: string;
+
+    @Column({type: 'integer', name: 'price'})
+    price: number
+
+    constructor(tid: string, cid: number, data: any) {
+        if (data) {
+            this.tid = tid;
+            this.cid = cid;
+            this.item = data.item.id;
+            this.currencyItem = data.currencyItem.id;
+            this.taskUnlock = data.taskUnlock?.id ?? data.taskUnlock;
+            this.price = data.price;
+        }
+    }
+
+}
+
+@Entity('tarkov_trader_level')
+export class TarkovTraderLevel {
+    @PrimaryColumn()
+    tid: string;
+
+    @PrimaryColumn({type: 'integer'})
+    level: number;
+
+    @Column({type: 'integer', name: 'required_player_level'})
+    requiredPlayerLevel: number;
+
+    @Column({type: 'float', name: 'required_reputation'})
+    requiredReputation: number;
+
+    @Column({type: 'integer', name: 'required_commerce'})
+    requiredCommerce: number;
+
+    constructor(tid: string, data: any) {
+        if (data) {
+            this.tid = tid;
+            this.level = data.level
+            this.requiredPlayerLevel = data.requiredPlayerLevel
+            this.requiredReputation = data.requiredReputation
+            this.requiredCommerce = data.requiredCommerce
+        }
+    }
+
+}
+
+
+@Entity()
+export class TarkovAchievement {
+    @PrimaryColumn()
+    id: string
+
+    @Column({type: "timestamp without time zone", name: 'last_updated'})
+    lastUpdated: Date
+
+    @Column({nullable: false})
+    name: string
+
+    @Column({nullable: false})
+    description: string
+
+    @Column({nullable: false})
+    hidden: boolean
+
+    @Column({nullable: false, type: 'float', name: 'players_completed_percent'})
+    playersCompletedPercent: number
+
+    @Column({nullable: false, type: 'float', name: 'adjusted_players_completed_percent'})
+    adjustedPlayersCompletedPercent: number
+
+    @Column({nullable: false})
+    side: string
+
+    @Column({nullable: false})
+    rarity: string
+
+    normalizedSide?: string
+
+    normalizedRarity?: string
+
+    constructor(data: Partial<TarkovAchievement>) {
+        if (data) {
+            this.id = data.id;
+            this.name = data.name;
+            this.description = data.description;
+            this.hidden = data.hidden;
+            this.playersCompletedPercent = data.playersCompletedPercent;
+            this.adjustedPlayersCompletedPercent = data.adjustedPlayersCompletedPercent;
+            this.side = data.normalizedSide;
+            this.rarity = data.normalizedRarity;
+            this.normalizedSide = data.normalizedSide;
+            this.normalizedRarity = data.normalizedRarity;
+            this.lastUpdated = new Date();
         }
     }
 
@@ -180,23 +374,176 @@ export class TarkovItem {
 
 }
 
+@Entity('tarkov_task')
 export class TarkovTask {
 
+    @PrimaryColumn()
+    id: string
+
+    @Column()
+    name: string
+
+    @Column({name: 'normalized_name'})
+    normalizedName: string
+
+    @Column({nullable: false})
+    trader: string
+
+    @Column({nullable: true})
+    map: string
+
+    @Column({type: 'integer', nullable: true})
+    experience: number
+
+    @Column({nullable: true, name: 'wiki_link'})
+    wikiLink: string
+
+    @Column({nullable: true, name: 'task_image_link'})
+    taskImageLink: string
+
+    @Column({nullable: true, name: 'min_player_level', type: 'integer'})
+    minPlayerLevel: number
+
+    @Column({type: 'simple-array', nullable: true})
+    requirements: string[]
+
+    @Column()
+    restartable: boolean;
+
+    @Column({name: 'faction_name'})
+    factionName: string;
+
+    @Column({name: 'kappa_required'})
+    kappaRequired: boolean;
+
+    @Column({name: 'lightkeeper_required'})
+    lightkeeperRequired: boolean;
+
+    objectives: TarkovTaskObjective[] = []
+    rewards: TarkovTaskReward[] = []
+
+    constructor(data: any) {
+        if (data) {
+            this.id = data.id
+            this.name = data.name
+            this.normalizedName = data.normalizedName
+            this.trader = data.trader
+            this.map = data.map
+            this.experience = data.experience
+            this.wikiLink = data.wikiLink
+            this.taskImageLink = data.taskImageLink
+            this.minPlayerLevel = data.minPlayerLevel
+            this.requirements = data.taskRequirements.map((req: any) => req.task.id)
+            this.restartable = data.restartable
+            this.factionName = data.factionName
+            this.kappaRequired = data.kappaRequired
+            this.lightkeeperRequired = data.lightkeeperRequired
+            for (let obj of data.objectives) {
+                this.objectives.push(new TarkovTaskObjective(this.id, obj))
+            }
+            let kyList = Object.keys(data.startRewards)
+            for (let field of kyList) {
+                for (let startReward of data.startRewards[field]) {
+                    this.rewards.push(new TarkovTaskReward(this.id, field, 'start', startReward))
+                }
+            }
+            kyList = Object.keys(data.finishRewards)
+            for (let field of kyList) {
+                for (let finishReward of data.finishRewards[field]) {
+                    this.rewards.push(new TarkovTaskReward(this.id, field, 'finish', finishReward))
+                }
+            }
+            kyList = Object.keys(data.failureOutcome)
+            for (let field of kyList) {
+                for (let failureReward of data.failureOutcome[field]) {
+                    this.rewards.push(new TarkovTaskReward(this.id, field, 'failure', failureReward))
+                }
+            }
+        }
+    }
+
 }
 
-export class TarkovMap {
+@Entity('tarkov_task_objective')
+export class TarkovTaskObjective {
+
+    @PrimaryColumn()
+    tid: string
+
+    @PrimaryColumn()
+    id: string;
+
+    @Column({nullable: false})
+    description: string;
+
+    @Column({nullable: false})
+    optional: boolean;
+
+    @Column({type: 'simple-array', nullable: false})
+    maps: string[];
+
+    constructor(tid: string, data: any) {
+        if (data) {
+            this.tid = tid
+            this.id = data.id
+            this.description = data.description
+            this.optional = data.optional
+            this.maps = data.maps
+        }
+    }
 
 }
 
-export class TarkovItemCraft {
+@Entity('tarkov_task_reward')
+export class TarkovTaskReward {
 
+    @PrimaryColumn()
+    tid: string;
 
-}
+    @PrimaryColumn()
+    field: string;
 
-export class TarkovItemBarter {
+    // start, finish, failure
+    @PrimaryColumn()
+    category: string;
 
-}
+    @PrimaryColumn()
+    ref: string
 
-export class TarkovItemPurchase {
+    @PrimaryGeneratedColumn('increment')
+    idx: number
+
+    @Column({nullable: true})
+    value: string;
+
+    constructor(tid: string, field: string, category: string, obj: any) {
+        if (tid) {
+            this.tid = tid
+            this.field = field
+            this.category = category
+            switch (field) {
+                case 'items':
+                    this.ref = obj.item.id;
+                    this.value = obj.item.quantity
+                    break;
+                case 'offerUnlock':
+                    this.ref = obj.id;
+                    this.value = obj.id;
+                    break;
+                case 'traderStanding':
+                    this.ref = 'traderStanding'
+                    this.value = obj.standing;
+                    break;
+                case 'craftUnlock':
+                    this.ref = obj.id;
+                    this.value = obj.id;
+                    break;
+                case 'traderUnlock':
+                    this.ref = 'traderUnlock'
+                    this.value = 'traderUnlock'
+                    break;
+            }
+        }
+    }
 
 }

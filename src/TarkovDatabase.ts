@@ -11,121 +11,70 @@
 * */
 import {Column, DataSource, Entity, PrimaryColumn, PrimaryGeneratedColumn} from "typeorm";
 import {gql, request} from "graphql-request";
-import {TarkovItem, TarkovTrader} from "./TarkovDataObjects";
+import {
+    TarkovAchievement,
+    TarkovItem,
+    TarkovTask,
+    TarkovTaskObjective,
+    TarkovTaskReward,
+    TarkovTrader, TarkovTraderBarter, TarkovTraderBarterRequirement, TarkovTraderCashOffer, TarkovTraderLevel
+} from "./TarkovDataObjects";
+import axios from "axios";
 
-/*
-* This will be the core 'profile' of a user, and what determines uniqueness of a user.
-* */
-@Entity()
-export class TarkovProfile {
+@Entity('profile_instance_header')
+export class TarkovProfileInstanceHeader {
+
+    // instance ID, created new when refreshing a profile
+    @PrimaryGeneratedColumn('increment')
+    iid: number
+
+    // the AID of the profile being refreshed. We use the API integer key for this as its faster
     @PrimaryColumn()
-    tid: string
-
-    @Column({nullable: false})
-    name: string
-
-    @Column({nullable: true, name: 'last_name'})
-    lastName: string
-
-// side - BEAR or TARKOV. cannot change
-    @Column({nullable: false})
-    side: string
-
-    @Column({name: 'last_updated', type: "timestamp without time zone"})
-    lastUpdated: Date
-}
-
-@Entity()
-export class TarkovAchievement {
-    @PrimaryColumn()
-    id: string
-
-    @Column({type: "timestamp without time zone", name: 'last_updated'})
-    lastUpdated: Date
-
-    @Column({nullable: false})
-    name: string
-
-    @Column({nullable: false})
-    description: string
-
-    @Column({nullable: false})
-    hidden: boolean
-
-    @Column({nullable: false, type: 'float', name: 'players_completed_percent'})
-    playersCompletedPercent: number
-
-    @Column({nullable: false, type: 'float', name: 'adjusted_players_completed_percent'})
-    adjustedPlayersCompletedPercent: number
-
-    @Column({nullable: false})
-    side: string
-
-    @Column({nullable: false})
-    rarity: string
-
-    normalizedSide?: string
-
-    normalizedRarity?: string
-
-    constructor(data: Partial<TarkovAchievement>) {
-        if (data) {
-            this.id = data.id;
-            this.name = data.name;
-            this.description = data.description;
-            this.hidden = data.hidden;
-            this.playersCompletedPercent = data.playersCompletedPercent;
-            this.adjustedPlayersCompletedPercent = data.adjustedPlayersCompletedPercent;
-            this.side = data.normalizedSide;
-            this.rarity = data.normalizedRarity;
-            this.normalizedSide = data.normalizedSide;
-            this.normalizedRarity = data.normalizedRarity;
-            this.lastUpdated = new Date();
-        }
-    }
-
-}
-
-@Entity('profile_achievements')
-export class TarkovProfileAchievement {
-    @PrimaryColumn()
-    tid: string
-
-    @PrimaryColumn()
-    achid: string
-
-    @Column({type: 'timestamp without time zone', nullable: false, name: 'logged_at'})
-    loggedAt: Date
-}
-
-//*
-// intended to reference a specific pull of data. This is a 'snapshot' of the profile at a specific time
-// *//
-@Entity('profile_instance')
-export class TarkovProfileInstance {
-
-    // internal ID representing the 'instance' of the scrape for data
-    // required so we can easily reference the same profile instance later
-    @PrimaryGeneratedColumn('uuid')
-    iid: string
-
-    // ID from tarkov - string, 24 characters. matches 'tid' on ProfileAchievement
-    @Column()
-    tid: string
-
-    // ID from tarkov.dev - their numerical ID
-    @Column({nullable: false})
     aid: number
 
     @Column({type: 'timestamp without time zone', name: 'logged_at', nullable: false})
     loggedAt: Date
 
-    @Column({type: 'integer', name: 'total_in_game_time', nullable: false})
-    totalInGameTime: number
+    constructor(aid: number) {
+        this.aid = aid;
+        this.loggedAt = new Date();
+    }
+}
 
-    // nickname - can be changed in-game
+/*
+* This will be the core 'profile' of a user, and what determines uniqueness of a user.
+* */
+@Entity('profile_header')
+export class TarkovProfile {
+    @PrimaryColumn()
+    tid: string
+
+    @Column({nullable: false})
+    aid: number
+
+    constructor(profile) {
+        if (profile) {
+            this.tid = profile.id;
+            this.aid = profile.aid;
+        }
+    }
+
+}
+
+@Entity('profile_info')
+export class TarkovProfileInstanceInfo {
+
+    @PrimaryColumn()
+    aid: number;
+
+    @PrimaryColumn()
+    iid: number
+
     @Column({nullable: false})
     nickname: string
+
+    @Column({nullable: false})
+    side: string
 
     @Column({nullable: false})
     experience: number
@@ -136,8 +85,35 @@ export class TarkovProfileInstance {
     @Column({nullable: false, name: 'banned_state'})
     bannedState: boolean
 
-    @Column({type: 'timestamp without time zone', nullable: false, name: 'registration_date'})
+    @Column({nullable: false, name: 'banned_until'})
+    bannedUntil: number
+
+    @Column({nullable: false, name: 'registration_date'})
     registrationDate: Date
+
+    constructor(aid: number, iid: number, info: any) {
+        if (info) {
+            this.aid = aid;
+            this.iid = iid;
+            this.nickname = info.nickname;
+            this.side = info.side;
+            this.experience = info.experience;
+            this.memberCategory = info.memberCategory;
+            this.bannedState = info.bannedState;
+            this.bannedUntil = info.bannedUntil;
+            this.registrationDate = new Date(info.registrationDate * 1000);
+        }
+    }
+}
+
+@Entity('profile_customization')
+export class TarkovProfileInstanceCustomization {
+
+    @PrimaryColumn()
+    aid: number
+
+    @PrimaryColumn()
+    iid: number
 
     @Column({nullable: true})
     head: string
@@ -150,6 +126,225 @@ export class TarkovProfileInstance {
 
     @Column({nullable: true})
     hands: string
+
+    constructor(aid: number, iid: number, customization: any) {
+        if (customization) {
+            this.aid = aid;
+            this.iid = iid;
+            this.head = customization.head;
+            this.body = customization.body;
+            this.feet = customization.feet;
+            this.hands = customization.hands;
+        }
+    }
+}
+
+
+@Entity('profile_achievement')
+export class TarkovProfileInstanceAchievement {
+    @PrimaryColumn()
+    aid: number
+
+    @PrimaryColumn()
+    iid: number
+
+    @PrimaryColumn()
+    achid: string
+
+    @Column({type: 'timestamp without time zone', nullable: false, name: 'logged_at'})
+    loggedAt: Date
+
+    constructor(aid: number, iid: number, ach: string, loggedAt: number) {
+        if (aid) {
+            this.aid = aid;
+            this.iid = iid;
+            this.achid = ach;
+            this.loggedAt = new Date(loggedAt * 1000);
+        }
+    }
+
+}
+
+//
+// //*
+// // intended to reference a specific pull of data. This is a 'snapshot' of the profile at a specific time
+// // *//
+// @Entity('profile_instance')
+// export class TarkovProfileInstance222 {
+//
+//     // internal ID representing the 'instance' of the scrape for data
+//     // required so we can easily reference the same profile instance later
+//     @PrimaryGeneratedColumn('uuid')
+//     iid: string
+//
+//     // ID from tarkov - string, 24 characters. matches 'tid' on ProfileAchievement
+//     @Column()
+//     tid: string
+//
+//     // ID from tarkov.dev - their numerical ID
+//     @Column({nullable: false})
+//     aid: number
+//
+//     @Column({type: 'timestamp without time zone', name: 'logged_at', nullable: false})
+//     loggedAt: Date
+//
+//     @Column({type: 'integer', name: 'total_in_game_time', nullable: false})
+//     totalInGameTime: number
+//
+//     // nickname - can be changed in-game
+//     @Column({nullable: false})
+//     nickname: string
+//
+//     @Column({nullable: false})
+//     experience: number
+//
+//     @Column({nullable: false, name: 'member_category'})
+//     memberCategory: number
+//
+//     @Column({nullable: false, name: 'banned_state'})
+//     bannedState: boolean
+//
+//     @Column({type: 'timestamp without time zone', nullable: false, name: 'registration_date'})
+//     registrationDate: Date
+//
+//     @Column({nullable: true})
+//     head: string
+//
+//     @Column({nullable: true})
+//     body: string
+//
+//     @Column({nullable: true})
+//     feet: string
+//
+//     @Column({nullable: true})
+//     hands: string
+//
+
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_sessions'})
+//     scavSessions: number
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_deaths'})
+//     scavDeaths: number
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_extracts'})
+//     scavExtracts: number
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_runners'})
+//     scavRunners: number
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_kills'})
+//     scavKills: number
+//
+//     @Column({type: 'integer', nullable: true, name: 'scav_longest_win_streak'})
+//     scavLongestWinStreak: number
+// }
+
+@Entity('profile_equipment_instance')
+export class TarkovProfileInstanceEquipment {
+
+    @PrimaryColumn()
+    aid: number
+
+    @PrimaryColumn()
+    iid: number
+
+    @PrimaryColumn()
+    eid: string;
+
+    @PrimaryColumn()
+    tpl: string;
+
+    @Column({nullable: true})
+    parent: string
+
+    @Column({nullable: true})
+    slot: string
+
+    constructor(aid: number, iid: number, eqRecord: any) {
+        if (eqRecord) {
+            this.aid = aid;
+            this.iid = iid;
+            this.eid = eqRecord._id;
+            this.tpl = eqRecord._tpl;
+            this.parent = eqRecord.parentId;
+            this.slot = eqRecord.slotId;
+        }
+    }
+
+}
+
+@Entity('profile_skills_instance')
+export class TarkovProfileInstanceCommonSkills {
+
+    @PrimaryColumn()
+    aid: number
+
+    @PrimaryColumn()
+    iid: number
+
+    @PrimaryColumn()
+    skill: string
+
+    @Column({type: 'float'})
+    progress: number
+
+    @Column({type: 'float', name: 'points_earned_during_session'})
+    pointsEarnedDuringSession: number
+
+    @Column({type: 'timestamp without time zone', name: 'last_access'})
+    lastAccess: Date
+
+    constructor(aid: number, iid: number, data: any) {
+        if (data) {
+            this.aid = aid;
+            this.iid = iid;
+            this.skill = data.Id;
+            this.progress = data.Progress;
+            this.pointsEarnedDuringSession = data.PointsEarnedDuringSession;
+            this.lastAccess = new Date(data.LastAccess);
+        }
+    }
+
+}
+
+@Entity('profile_mastery_instance')
+export class TarkovProfileInstanceMasterySkills {
+
+    @PrimaryColumn()
+    aid: number
+
+    @PrimaryColumn()
+    iid: number
+
+    @PrimaryColumn()
+    skill: string
+
+    @Column({type: 'integer'})
+    progress: number
+
+    constructor(aid: number, iid: number, data: any) {
+        if (data) {
+            this.aid = aid;
+            this.iid = iid;
+            this.skill = `${data.Id}`;
+            this.progress = data.Progress;
+        }
+    }
+
+}
+
+@Entity('profile_pmc_counters')
+export class TarkovProfileInstancePMCCounters {
+
+    @PrimaryColumn()
+    aid: number;
+
+    @PrimaryColumn()
+    iid: number;
+
+    @Column({type: 'integer', name: 'total_in_game_time', nullable: false})
+    totalInGameTime: number
 
     @Column({type: 'integer', nullable: true, name: 'pmc_sessions'})
     pmcSessions: number
@@ -169,6 +364,72 @@ export class TarkovProfileInstance {
     @Column({type: 'integer', nullable: true, name: 'pmc_longest_win_streak'})
     pmcLongestWinStreak: number
 
+    constructor(aid: number, iid: number, inGameTime: number, items: any[]) {
+        if (items) {
+            this.aid = aid;
+            this.iid = iid;
+            this.totalInGameTime = inGameTime;
+
+            // we CANNOT assume the order of the items! Each field should grab the field based on the key value after mapping
+            let mapItems = items.map((i) => {
+                return {
+                    key: i.Key.join('_'),
+                    value: i.Value
+                }
+            })
+
+            let psBuff = (mapItems.filter((i) => i.key.includes('Pmc') && i.key.includes('Sessions')))
+            if (psBuff?.length > 0)
+                this.pmcSessions = psBuff[0].value
+            else
+                this.pmcSessions = 0
+
+            let pdBuff = (mapItems.filter((i) => i.key.includes('Pmc') && i.key.includes('Killed') && i.key.includes('ExitStatus')))
+            if (pdBuff?.length > 0)
+                this.pmcDeaths = pdBuff[0].value
+            else
+                this.pmcDeaths = 0
+
+            let peBuff = (mapItems.filter((i) => i.key.includes('Pmc') && i.key.includes('Survived')))
+            if (peBuff?.length > 0)
+                this.pmcExtracts = peBuff[0].value
+            else
+                this.pmcExtracts = 0
+
+            let prBuff = (mapItems.filter((i) => i.key.includes('Pmc') && i.key.includes('Runner')))
+            if (prBuff?.length > 0)
+                this.pmcRunners = prBuff[0].value
+            else
+                this.pmcRunners = 0
+
+            let pkBuff = (mapItems.filter((i) => i.key.includes('Kills')))
+            if (pkBuff?.length > 0)
+                this.pmcKills = pkBuff[0].value
+            else
+                this.pmcKills = 0
+
+            let pwBuff = (mapItems.filter((i) => i.key.includes('LongestWinStreak')))
+            if (pwBuff?.length > 0)
+                this.pmcLongestWinStreak = pwBuff[0].value
+            else
+                this.pmcLongestWinStreak = 0
+        }
+    }
+
+}
+
+@Entity('profile_scav_counters')
+export class TarkovProfileInstanceScavCounters {
+
+    @PrimaryColumn()
+    aid: number;
+
+    @PrimaryColumn()
+    iid: number;
+
+    @Column({type: 'integer', name: 'total_in_game_time', nullable: false})
+    totalInGameTime: number
+
     @Column({type: 'integer', nullable: true, name: 'scav_sessions'})
     scavSessions: number
 
@@ -178,66 +439,113 @@ export class TarkovProfileInstance {
     @Column({type: 'integer', nullable: true, name: 'scav_extracts'})
     scavExtracts: number
 
-    @Column({type: 'integer', nullable: true, name: 'scav_runners'})
-    scavRunners: number
-
     @Column({type: 'integer', nullable: true, name: 'scav_kills'})
     scavKills: number
 
     @Column({type: 'integer', nullable: true, name: 'scav_longest_win_streak'})
     scavLongestWinStreak: number
+
+    constructor(aid: number, iid: number, inGameTime: number, items: any[]) {
+        if (items) {
+            this.aid = aid;
+            this.iid = iid;
+            this.totalInGameTime = inGameTime;
+
+            // we CANNOT assume the order of the items! Each field should grab the field based on the key value after mapping
+            let mapItems = items.map((i) => {
+                return {
+                    key: i.Key.join('_'),
+                    value: i.Value
+                }
+            })
+
+            let ssBuff = (mapItems.filter((i) => i.key.includes('Scav') && i.key.includes('Sessions')))
+            if (ssBuff?.length > 0)
+                this.scavSessions = ssBuff[0].value
+            else
+                this.scavSessions = 0
+
+            let sdBuff = (mapItems.filter((i) => i.key.includes('Scav') && i.key.includes('Killed') && i.key.includes('ExitStatus')))
+            if (sdBuff?.length > 0)
+                this.scavDeaths = sdBuff[0].value
+            else
+                this.scavDeaths = 0
+
+            let seBuff = (mapItems.filter((i) => i.key.includes('Scav') && i.key.includes('Survived')))
+            if (seBuff?.length > 0)
+                this.scavExtracts = seBuff[0].value
+            else
+                this.scavExtracts = 0
+
+            let skBuff = (mapItems.filter((i) => i.key.includes('Kills')))
+            if (skBuff?.length > 0)
+                this.scavKills = skBuff[0].value
+            else
+                this.scavKills = 0
+
+            let swBuff = (mapItems.filter((i) => i.key.includes('LongestWinStreak')))
+            if (swBuff?.length > 0)
+                this.scavLongestWinStreak = swBuff[0].value
+            else
+                this.scavLongestWinStreak = 0
+        }
+    }
+
 }
 
-@Entity('profile_equipment_instance')
-export class TarkovProfileEquipmentInstance {
+@Entity('tracker_request')
+export class TarkovProfileManualRequest {
+    // this table will be used to manually request a profile refresh by a user.
+    // record is updated once the refresh is completed
+    @PrimaryGeneratedColumn('uuid')
+    rid: string
 
-    @PrimaryColumn()
-    iid: string
+    // the user account that we want to track
+    @Column({nullable: false})
+    aid: number
 
-    @Column()
-    eid: string;
+    @Column({
+        nullable: false,
+        type: 'timestamp without time zone',
+        name: 'requested_at',
+        default: () => 'CURRENT_TIMESTAMP'
+    })
+    requestedAt: Date
 
-    @Column()
-    tpl: string;
+    @Column({nullable: true, type: 'timestamp without time zone', name: 'completed_at'})
+    completedAt: Date
 
-    @Column()
-    parent: string
+    @Column({nullable: true, type: 'integer'})
+    iid: number
 
-    @Column()
-    slot: string
-}
-
-@Entity('profile_skills_instance')
-export class TarkovProfileSkillsInstance {
-
-    @PrimaryColumn()
-    iid: string
-
-    @PrimaryColumn()
-    skill: string
-
-    @Column()
-    progress: number
-
-    @Column({type: 'float', name: 'points_earned_during_session'})
-    pointsEarnedDuringSession: number
-
-    @Column({type: 'timestamp without time zone', name: 'last_access'})
-    lastAccess: Date
+    constructor(aid: number) {
+        if (aid)
+            this.aid = aid;
+    }
 
 }
 
-@Entity('profile_mastery_instance')
-export class TarkovProfileMasteryInstance {
+@Entity('tracker_schedule')
+export class TarkovProfileScheduledRequest {
+    // this table will be used to request a profile over a schedule of time
 
+    // the account that we want to track on a regular basis
     @PrimaryColumn()
-    iid: string
+    aid: number
 
-    @PrimaryColumn()
-    skill: string
+    @Column({
+        nullable: false,
+        type: 'timestamp without time zone',
+        name: 'last_request_at',
+        default: () => 'CURRENT_TIMESTAMP'
+    })
+    lastRequestAt: Date
 
-    @Column()
-    progress: number
+    // offset in minutes that we should force before the next refresh. default 15
+    @Column({nullable: true, type: 'integer', name: 'minute_offset', default: 15})
+    minuteOffset: number;
+
+
 }
 
 export class TarkovDatabase {
@@ -248,18 +556,40 @@ export class TarkovDatabase {
         TarkovDatabase.TarkovDB = new DataSource({
             name: 'cache',
             type: 'postgres',
+            database: 'tarkov',
+            schema: 'public',
             host: process.env.PG_HOST,
             port: parseInt(process.env.PG_PORT),
             username: process.env.PG_USER,
             password: process.env.PG_PASS,
             poolSize: 4,
             synchronize: true,
-            entities: [TarkovAchievement, TarkovProfile, TarkovProfileAchievement, TarkovProfileInstance,
-                TarkovProfileEquipmentInstance, TarkovProfileSkillsInstance, TarkovProfileMasteryInstance,
-                TarkovTrader, TarkovItem]
+            entities: [TarkovAchievement, TarkovProfile, TarkovProfileInstanceAchievement,
+                TarkovProfileInstanceHeader, TarkovProfileInstanceCustomization,
+                TarkovProfileInstanceEquipment, TarkovProfileInstanceCommonSkills, TarkovProfileInstanceMasterySkills,
+                TarkovProfileInstancePMCCounters, TarkovProfileInstanceScavCounters, TarkovProfileInstanceInfo,
+                TarkovTrader, TarkovItem, TarkovProfileScheduledRequest, TarkovProfileManualRequest, TarkovTaskReward, TarkovTaskObjective, TarkovTask,
+            TarkovTraderLevel, TarkovTraderBarter, TarkovTraderCashOffer, TarkovTraderBarterRequirement
+
+            ]
         })
         await TarkovDatabase.TarkovDB.initialize();
         await TarkovDatabase.TarkovDB.synchronize(false);
+        try {
+            await TarkovDatabase.TarkovDB.query(`select null "rid", aid,
+       last_request_at + (minute_offset * interval '1 minute') "next_request_at",
+       last_request_at,
+       true                                                    "isScheduled"
+from tracker_schedule
+union
+select rid, aid, requested_at as "next_request_at", null "last_request_at", false
+from tracker_request
+where completed_at is null
+order by next_request_at asc`);
+        } catch (e) {
+            console.error(e)
+        }
+
     }
 
     private static async runGraphQuery(query: string) {
@@ -267,7 +597,13 @@ export class TarkovDatabase {
         return await request('https://api.tarkov.dev/graphql', q)
     }
 
-    private static async refreshAchievements() {
+    private static async runPlayerQuery(pt: string) {
+        return await axios.get(`https://player.tarkov.dev/${pt}`, {
+            responseType: "json",
+        })
+    }
+
+    static async refreshAchievements() {
         let res: {
             achievements: TarkovAchievement[]
         } = (await TarkovDatabase.runGraphQuery(`
@@ -292,7 +628,7 @@ export class TarkovDatabase {
         return res?.achievements
     }
 
-    private static async refreshItems() {
+    static async refreshItems() {
         let res: {
             items: any[]
         } = (await TarkovDatabase.runGraphQuery(`{
@@ -418,10 +754,10 @@ export class TarkovDatabase {
         return res.items
     }
 
-    private static async refreshTraders() {
+    static async refreshTraders() {
         let res: {
             traders: any[]
-        } = (await TarkovDatabase.runGraphQuery(`{
+        } = (await TarkovDatabase.runGraphQuery(`{ 
   traders {
     id
     name
@@ -459,6 +795,9 @@ export class TarkovDatabase {
       }
     }
     cashOffers {
+      item {
+        id
+      }
       minTraderLevel
       taskUnlock {
         id
@@ -475,17 +814,34 @@ export class TarkovDatabase {
             traders: any[]
         })
 
-        for(let t of res?.traders) {
+        for (let t of res?.traders) {
             let trader = new TarkovTrader(t)
+
+            // save all trader related records now, from most detailed to least
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTraderBarterRequirement).save(trader.barters.map((b) => b.requirements).flat(1))
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTraderBarterRequirement).save(trader.barters.map((b) => b.rewards).flat(1))
+
+            // save barters themselves
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTraderBarter).save(trader.barters.map((b, idx) => {
+                b.bid = idx
+                return b;
+            }))
+
+            // save trader levels
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTraderLevel).save(trader.levels)
+
+            // save cash purchase options
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTraderCashOffer).save(trader.cashOffers)
+
+            // save trader itself
             await TarkovDatabase.TarkovDB.getRepository(TarkovTrader).save(trader)
 
-            // save the barters and crafts as well here
         }
 
         return res?.traders
     }
 
-    private static async refreshTasks() {
+    static async refreshTasks() {
         let res: {
             tasks: any[]
         } = (await TarkovDatabase.runGraphQuery(`{
@@ -602,10 +958,17 @@ export class TarkovDatabase {
             tasks: any[]
         })
 
+        for (let t of res.tasks) {
+            let task = new TarkovTask(t)
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTaskObjective).save(task.objectives);
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTaskReward).save(task.rewards);
+            await TarkovDatabase.TarkovDB.getRepository(TarkovTask).save(task);
+        }
+
         return res.tasks;
     }
 
-    private static async refreshCrafts() {
+    static async refreshCrafts() {
         let res: {
             crafts: any[]
         } = (await TarkovDatabase.runGraphQuery(`{
@@ -635,12 +998,157 @@ export class TarkovDatabase {
         return res.crafts;
     }
 
+    static async bulkSaveEquipment(equipList: TarkovProfileInstanceEquipment[]) {
+        while (equipList.length > 0) {
+            // save equip data by splitting up by 100 records at a time
+            let saveList = equipList.slice(0, 100)
+            await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceEquipment).save(saveList)
+
+            if (equipList.length > 0)
+                equipList = equipList.slice(100)
+            else
+                equipList = []
+        }
+    }
+
+    static async bulkSaveCommonSkills(skillList: TarkovProfileInstanceCommonSkills[]) {
+        while (skillList.length > 0) {
+            // save equip data by splitting up by 100 records at a time
+            let saveList = skillList.slice(0, 100)
+            await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceCommonSkills).save(saveList)
+
+            if (skillList.length > 0)
+                skillList = skillList.slice(100)
+            else
+                skillList = []
+        }
+    }
+
+    static async bulkSaveMasterySkills(skillList: TarkovProfileInstanceMasterySkills[]) {
+        while (skillList.length > 0) {
+            // save equip data by splitting up by 100 records at a time
+            let saveList = skillList.slice(0, 100)
+            await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceMasterySkills).save(saveList)
+
+            if (skillList.length > 0)
+                skillList = skillList.slice(100)
+            else
+                skillList = []
+        }
+    }
+
+    // passed in AID (account id) from tarkov.dev
+    // can be gotten from the username search
+    static async refreshProfile(aid: number) {
+        // first, lets create a 'refresh instance' before calling the API
+        let instance = new TarkovProfileInstanceHeader(aid)
+
+        // query the DB. if we successfully get a profile, we can then save the instance
+        let res = await TarkovDatabase.runPlayerQuery(`account/${aid}`)
+        if (res.status != 200)
+            throw new Error(res.statusText)
+
+        // make sure the profile itself is saved
+        let profile = new TarkovProfile(res.data)
+        await TarkovDatabase.TarkovDB.getRepository(TarkovProfile).save(profile)
+
+        // save the instance, we did get some player data
+        // we can now use the instance.iid to save any future profile data
+        instance = await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceHeader).save(instance)
+
+        // now we can save the rest of the profile data
+        let info = new TarkovProfileInstanceInfo(aid, instance.iid, res.data.info);
+        await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceInfo).save(info)
+
+        // save the customization data (head through feet)
+        let cust = new TarkovProfileInstanceCustomization(aid, instance.iid, res.data.customization);
+        await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceCustomization).save(cust)
+
+        // save skills data
+        // common first
+        let commonSkillIst = [];
+        for (let sk of res.data.skills?.Common) {
+            let skill = new TarkovProfileInstanceCommonSkills(aid, instance.iid, sk);
+            commonSkillIst.push(skill);
+        }
+        await TarkovDatabase.bulkSaveCommonSkills(commonSkillIst);
+
+        // mastery next
+        let masterySkillList = [];
+        for (let mk of res.data.skills?.Mastering) {
+            let skill = new TarkovProfileInstanceMasterySkills(aid, instance.iid, mk);
+            masterySkillList.push(skill);
+        }
+        await TarkovDatabase.bulkSaveMasterySkills(masterySkillList);
+
+        // save the equipment data
+        let equipSaveList = [];
+        for (let eq of res.data.equipment?.Items) {
+            let equip = new TarkovProfileInstanceEquipment(aid, instance.iid, eq);
+            equipSaveList.push(equip);
+        }
+        await TarkovDatabase.bulkSaveEquipment(equipSaveList);
+
+        let achKeys = Object.keys(res.data.achievements)
+        // save achievements
+        for (let ach of achKeys) {
+            let achObj = new TarkovProfileInstanceAchievement(aid, instance.iid, ach, res.data.achievements[ach]);
+            await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceAchievement).save(achObj);
+        }
+
+        // save PMC stats
+        let pmcCounters: any[] = res.data?.pmcStats?.eft?.overAllCounters?.Items;
+        let pmcTime: number = res.data?.pmcStats?.eft?.totalInGameTime;
+        let pmc = new TarkovProfileInstancePMCCounters(aid, instance.iid, pmcTime, pmcCounters);
+        await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstancePMCCounters).save(pmc);
+
+        // save Scav stats
+        let scavCounters: any[] = res.data?.scavStats?.eft?.overAllCounters?.Items;
+        let scavTime: number = res.data?.scavStats?.eft?.totalInGameTime;
+        let scav = new TarkovProfileInstanceScavCounters(aid, instance.iid, scavTime, scavCounters);
+        await TarkovDatabase.TarkovDB.getRepository(TarkovProfileInstanceScavCounters).save(scav);
+        return instance;
+    }
+
+    static async searchProfile(partialString: string): Promise<{ aid: string, name: string }[]> {
+        let res = await TarkovDatabase.runPlayerQuery(`name/${partialString}`)
+        if (res.status === 200) {
+            return res.data
+        } else
+            throw new Error(res.statusText)
+    }
+
     static async refreshCoreData() {
         await TarkovDatabase.refreshAchievements()
         await TarkovDatabase.refreshTraders();
         await TarkovDatabase.refreshItems();
-       // await TarkovDatabase.refreshTasks();
+        await TarkovDatabase.refreshTasks();
         //await TarkovDatabase.refreshCrafts();
+    }
+
+    static async updateScheduledRequest(aid: number) {
+        return await TarkovDatabase.TarkovDB.query('call update_scheduled_request($1)', [aid])
+    }
+
+    static async updateManualRequest(rid: string, iid: number) {
+        return await TarkovDatabase.TarkovDB.query('call update_manual_request($1, $2)', [rid, iid])
+    }
+
+    static async updateManualRequestFailed(rid: string) {
+        return await TarkovDatabase.TarkovDB.query('call update_manual_request_failed($1)', [rid])
+    }
+
+    static async getNextRequest(): Promise<{
+        rid?: string,
+        aid: number,
+        next_request_at: Date,
+        last_request_at?: Date,
+        isScheduled: boolean
+    }> {
+        let r = await TarkovDatabase.TarkovDB.query('select * from public.request_list_view limit 1');
+        if (r && r.length > 0) {
+            return r[0];
+        }
     }
 
 }
